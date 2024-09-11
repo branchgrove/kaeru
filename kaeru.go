@@ -85,7 +85,7 @@ func ParseJson(r io.Reader, output any) error {
 	decoder := json.NewDecoder(r)
 	var v any
 	err := decoder.Decode(&v)
-
+	
 	if err != nil {
 		return err
 	}
@@ -96,11 +96,11 @@ func ParseJson(r io.Reader, output any) error {
 func ParseJsonBytes(data []byte, output any) error {
 	var v any
 	err := json.Unmarshal(data, &v)
-
+	
 	if err != nil {
 		return err
 	}
-
+	
 	return Parse(v, output)
 }
 
