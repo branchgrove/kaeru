@@ -1,5 +1,8 @@
 package kaeru
 
+// TODO: custom error declarations
+// TODO: collect all errors and then return
+
 import (
 	"encoding/json"
 	"errors"
@@ -85,7 +88,7 @@ func ParseJson(r io.Reader, output any) error {
 	decoder := json.NewDecoder(r)
 	var v any
 	err := decoder.Decode(&v)
-	
+
 	if err != nil {
 		return err
 	}
@@ -96,11 +99,11 @@ func ParseJson(r io.Reader, output any) error {
 func ParseJsonBytes(data []byte, output any) error {
 	var v any
 	err := json.Unmarshal(data, &v)
-	
+
 	if err != nil {
 		return err
 	}
-	
+
 	return Parse(v, output)
 }
 
@@ -150,8 +153,6 @@ func parseValue(inVal reflect.Value, outVal reflect.Value) error {
 		return nil
 	}
 
-	// TODO: slice -> array
-
 	inValKind := inVal.Kind()
 	outValKind := outVal.Kind()
 
@@ -185,7 +186,6 @@ func isPrimitive(kind reflect.Kind) bool {
 		return true
 	default:
 		return false
-
 	}
 }
 
@@ -202,7 +202,10 @@ func parsePrimitive(inVal reflect.Value, outVal reflect.Value) error {
 		}
 		return errors.New("input value is string but there is no string parser")
 	case reflect.Bool:
-		outVal.Set(inVal.Convert(outVal.Type()))
+		if outVal.Kind() == reflect.Bool {
+			outVal.Set(inVal.Convert(outVal.Type()))
+			return nil
+		}
 	case reflect.Int8:
 		if parser, ok := outVal.Addr().Interface().(ParseInt8); ok {
 			return parser.ParseInt8(int8(inVal.Int()))
@@ -255,6 +258,11 @@ func parsePrimitive(inVal reflect.Value, outVal reflect.Value) error {
 		if parser, ok := outVal.Addr().Interface().(ParseFloat64); ok {
 			return parser.ParseFloat64(inVal.Float())
 		}
+	}
+
+	if inVal.Kind() == outVal.Kind() {
+		outVal.Set(inVal.Convert(outVal.Type()))
+		return nil
 	}
 
 	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
@@ -351,17 +359,16 @@ func parseMap(inVal reflect.Value, outVal reflect.Value) error {
 		return parseMapToMap(inVal, outVal)
 	}
 
-	panic(fmt.Sprintf("outVal is not of kind struct, map or ParseMap got: %s", outVal.Kind()))
+	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
 }
 
-// Parse slice input to slice output
-func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
+func parseSliceToSlice(inVal reflect.Value, outVal reflect.Value) error {
 	if inVal.Kind() != reflect.Slice {
 		panic("inVal must be slice")
 	}
 
-	if parser, ok := outVal.Addr().Interface().(ParseSlice); ok {
-		return parser.ParseSlice(inVal.Interface().([]any))
+	if outVal.Kind() != reflect.Slice {
+		panic("outVal must be slice")
 	}
 
 	outSlice := reflect.MakeSlice(outVal.Type(), inVal.Len(), inVal.Cap())
@@ -374,4 +381,59 @@ func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
 
 	outVal.Set(outSlice)
 	return nil
+}
+
+func parseSliceToArray(inVal reflect.Value, outVal reflect.Value) error {
+	if inVal.Kind() != reflect.Slice {
+		panic("inVal must be slice")
+	}
+
+	if outVal.Kind() != reflect.Array {
+		panic("outVal must be array")
+	}
+
+	inLen := inVal.Len()
+	outLen := outVal.Len()
+
+	// Check if the input slice is longer than the output array
+	if inLen > outLen {
+		return fmt.Errorf("input slice (length %d) is longer than output array (length %d)", inLen, outLen)
+	}
+
+	// Copy elements from the input slice to the output array
+	for i := 0; i < outLen; i++ {
+		var inValIndexValue reflect.Value
+		if i < inLen {
+			inValIndexValue = inVal.Index(i)
+		} else {
+			inValIndexValue = reflect.ValueOf(nil)
+		}
+
+		if err := parseValue(inValIndexValue, outVal.Index(i)); err != nil {
+			return fmt.Errorf("error parsing element at index %d: %w", i, err)
+		}
+	}
+
+	return nil
+}
+
+// Parse slice input to slice output
+func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
+	if inVal.Kind() != reflect.Slice {
+		panic("inVal must be slice")
+	}
+
+	if parser, ok := outVal.Addr().Interface().(ParseSlice); ok {
+		return parser.ParseSlice(inVal.Interface().([]any))
+	}
+
+	if outVal.Kind() == reflect.Slice {
+		return parseSliceToSlice(inVal, outVal)
+	}
+
+	if outVal.Kind() == reflect.Array {
+		return parseSliceToArray(inVal, outVal)
+	}
+
+	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
 }
