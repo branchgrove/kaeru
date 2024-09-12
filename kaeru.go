@@ -347,7 +347,10 @@ func parseMap(inVal reflect.Value, outVal reflect.Value) error {
 		panic("inVal must be a map")
 	}
 
+	// TODO: type assert input value map type and pass to correct interface
+
 	if parser, ok := outVal.Addr().Interface().(ParseMap); ok {
+  // TODO: it might not be a map[string]any
 		return parser.ParseMap(inVal.Interface().(map[string]any))
 	}
 
@@ -422,6 +425,8 @@ func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
 	if inVal.Kind() != reflect.Slice {
 		panic("inVal must be slice")
 	}
+
+	// TODO: type assert input slice and send to correct interface
 
 	if parser, ok := outVal.Addr().Interface().(ParseSlice); ok {
 		return parser.ParseSlice(inVal.Interface().([]any))
