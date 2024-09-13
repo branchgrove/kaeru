@@ -11,6 +11,10 @@ import (
 	"reflect"
 )
 
+type ParseAny interface {
+	ParseAny(v any) error
+}
+
 type ParseInt interface {
 	ParseInt(i int) error
 }
@@ -59,6 +63,10 @@ type ParseFloat64 interface {
 	ParseFloat64(f float64) error
 }
 
+type ParseStringMap interface {
+	ParseStringMap(m map[string]string) error
+}
+
 type ParseMap interface {
 	ParseMap(m map[string]any) error
 }
@@ -67,19 +75,25 @@ type ParseSlice interface {
 	ParseSlice(s []any) error
 }
 
+type ParseStringSlice interface {
+	ParseStringSlice(s []string) error
+}
+
 type Default interface {
 	Default()
 }
 
 func Parse(input any, output any) error {
+	outVal := reflect.ValueOf(output)
 	// Check if output is a pointer and is addressable
-	if reflect.ValueOf(output).Kind() != reflect.Ptr {
+	// Is this correct?
+	if outVal.Kind() != reflect.Ptr {
 		return errors.New("output must be a pointer")
 	}
 
 	// Get the reflect Value and Type of both input and output
 	inVal := reflect.ValueOf(input)
-	outVal := reflect.ValueOf(output).Elem()
+	outVal = outVal.Elem()
 
 	return parseValue(inVal, outVal)
 }
@@ -116,11 +130,11 @@ func parseValue(inVal reflect.Value, outVal reflect.Value) error {
 		reflect.Pointer,
 		reflect.Struct,
 		reflect.UnsafePointer:
-		panic("Inval is not a valid parseable value")
+		panic("inVal is not a valid parseable value")
 	}
-	// Silently ignore values that cannot be set such as private struct fields
+
 	if !outVal.CanSet() {
-		return nil
+		panic("outVal is not settable")
 	}
 
 	required := true
@@ -135,7 +149,7 @@ func parseValue(inVal reflect.Value, outVal reflect.Value) error {
 		outVal = outVal.Elem()
 		required = false
 	}
-
+	
 	// Handle nil input values using default or returning error if required
 	if !inVal.IsValid() {
 		if defaultable, ok := outVal.Addr().Interface().(Default); ok {
@@ -145,6 +159,10 @@ func parseValue(inVal reflect.Value, outVal reflect.Value) error {
 		}
 
 		return nil
+	}
+	
+	if parser, ok := outVal.Addr().Interface().(ParseAny); ok {
+		return parser.ParseAny(inVal.Interface())
 	}
 
 	// If types are the same we can just set them and call it a day
@@ -200,7 +218,6 @@ func parsePrimitive(inVal reflect.Value, outVal reflect.Value) error {
 		if parser, ok := outVal.Addr().Interface().(ParseString); ok {
 			return parser.ParseString(inVal.String())
 		}
-		return errors.New("input value is string but there is no string parser")
 	case reflect.Bool:
 		if outVal.Kind() == reflect.Bool {
 			outVal.Set(inVal.Convert(outVal.Type()))
@@ -260,12 +277,12 @@ func parsePrimitive(inVal reflect.Value, outVal reflect.Value) error {
 		}
 	}
 
-	if inVal.Kind() == outVal.Kind() {
+	if inVal.CanConvert(outVal.Type()) {
 		outVal.Set(inVal.Convert(outVal.Type()))
 		return nil
 	}
 
-	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
+	return fmt.Errorf("inVal %s is not parseable to outVal %s", inVal.Type(), outVal.Type())
 }
 
 func parseMapToMap(inVal reflect.Value, outVal reflect.Value) error {
@@ -347,11 +364,16 @@ func parseMap(inVal reflect.Value, outVal reflect.Value) error {
 		panic("inVal must be a map")
 	}
 
-	// TODO: type assert input value map type and pass to correct interface
+	if m, ok := inVal.Interface().(map[string]string); ok {
+		if parser, ok := outVal.Addr().Interface().(ParseStringMap); ok {
+			return parser.ParseStringMap(m)
+		}
+	}
 
-	if parser, ok := outVal.Addr().Interface().(ParseMap); ok {
-  // TODO: it might not be a map[string]any
-		return parser.ParseMap(inVal.Interface().(map[string]any))
+	if m, ok := inVal.Interface().(map[string]any); ok {
+		if parser, ok := outVal.Addr().Interface().(ParseMap); ok {
+			return parser.ParseMap(m)
+		}
 	}
 
 	if outVal.Kind() == reflect.Struct {
@@ -362,7 +384,7 @@ func parseMap(inVal reflect.Value, outVal reflect.Value) error {
 		return parseMapToMap(inVal, outVal)
 	}
 
-	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
+	return fmt.Errorf("inVal %s is not parseable to outVal %s", inVal.Type(), outVal.Type())
 }
 
 func parseSliceToSlice(inVal reflect.Value, outVal reflect.Value) error {
@@ -426,7 +448,11 @@ func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
 		panic("inVal must be slice")
 	}
 
-	// TODO: type assert input slice and send to correct interface
+	if s, ok := inVal.Interface().([]string); ok {
+		if parser, ok := outVal.Addr().Interface().(ParseStringSlice); ok {
+			return parser.ParseStringSlice(s)
+		}
+	}
 
 	if parser, ok := outVal.Addr().Interface().(ParseSlice); ok {
 		return parser.ParseSlice(inVal.Interface().([]any))
@@ -440,5 +466,5 @@ func parseSlice(inVal reflect.Value, outVal reflect.Value) error {
 		return parseSliceToArray(inVal, outVal)
 	}
 
-	return errors.New(fmt.Sprintf("inKind %s is not parseable to outKind %s", inVal.Kind(), outVal.Kind()))
+	return fmt.Errorf("inVal %s is not parseable to outVal %s", inVal.Type(), outVal.Type())
 }

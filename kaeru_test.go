@@ -114,29 +114,29 @@ type Post struct {
 
 func TestParsePost(t *testing.T) {
 	// Input data
-	input := map[string]interface{}{
+	input := map[string]any{
 		"Title": "My First Post",
 		"Body":  "This is the content of my first post. It's pretty exciting!",
-		"Metadata": map[string]interface{}{
+		"Metadata": map[string]any{
 			"category": "tech",
 			"tags":     "golang,testing",
 		},
-		"Labels":  []interface{}{"new", "featured"},
+		"Labels":  []any{"new", "featured"},
 		"Upvotes": 42.0,
-		"Poster": map[string]interface{}{
+		"Poster": map[string]any{
 			"Username":  "johndoe",
 			"Email":     "john@example.com",
 			"CreatedAt": "2023-09-11T10:00:00Z",
 			"IsAdmin":   true,
 		},
-		"Comments": []interface{}{
-			map[string]interface{}{
+		"Comments": []any{
+			map[string]any{
 				"Body": "Great post! Looking forward to more.",
-				"Metadata": map[string]interface{}{
+				"Metadata": map[string]any{
 					"likes": "5",
 				},
 				"Upvotes": 5.0,
-				"Commenter": map[string]interface{}{
+				"Commenter": map[string]any{
 					"Username":  "janedoe",
 					"Email":     "jane@example.com",
 					"CreatedAt": "2023-09-10T09:00:00Z",
