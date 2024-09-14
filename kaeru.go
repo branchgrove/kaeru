@@ -79,8 +79,8 @@ type ParseStringSlice interface {
 	ParseStringSlice(s []string) error
 }
 
-type Default interface {
-	Default()
+type SetDefault interface {
+	SetDefault()
 }
 
 func Parse(input any, output any) error {
@@ -152,8 +152,8 @@ func parseValue(inVal reflect.Value, outVal reflect.Value) error {
 	
 	// Handle nil input values using default or returning error if required
 	if !inVal.IsValid() {
-		if defaultable, ok := outVal.Addr().Interface().(Default); ok {
-			defaultable.Default()
+		if defaultable, ok := outVal.Addr().Interface().(SetDefault); ok {
+			defaultable.SetDefault()
 		} else if required {
 			return errors.New("inVal is nil but must be set")
 		}
